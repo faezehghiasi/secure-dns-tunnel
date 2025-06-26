@@ -1,9 +1,10 @@
 from crypto_utils.crypto_module import encrypt_message
 from base32_utils.base32 import encode_base32
 import dns.resolver
-import math
+import math ,socket
 
-
+resolver = dns.resolver.Resolver()
+resolver.nameservers = ['127.0.0.1']
 def chunk_message(message: bytes, chunk_size=30):
     chunks = []
     i = 0
@@ -13,6 +14,7 @@ def chunk_message(message: bytes, chunk_size=30):
     return chunks
 
 def send_chunked_message(message: bytes, key: bytes, base_domain="tunnel.example.com"):
+    global resolver
     chunks = chunk_message(message)
     for seq, chunk in enumerate(chunks):
         if seq == len(chunks) - 1:
@@ -27,9 +29,45 @@ def send_chunked_message(message: bytes, key: bytes, base_domain="tunnel.example
         encoded = encode_base32(encrypted)
         domain = f"{encoded}.{base_domain}"
         try:
-            dns.resolver.resolve(domain, 'TXT')
+            resolver.resolve(domain, 'TXT')
             print(f"[✓] Sent DNS query: {domain}")
         except Exception as e:
             print(f"[!] Failed to send: {domain} → {e}")
+
+
+
+
+
+# def send_dns_query(domain: str, server_ip="127.0.0.1", port=53535):
+#     # ساختار ساده DNS query فقط برای TYPE=TXT
+#     transaction_id = b'\xaa\xaa'  # شناسه دلخواه
+#     flags = b'\x01\x00'           # standard query
+#     qdcount = b'\x00\x01'         # 1 question
+#     ancount = b'\x00\x00'
+#     nscount = b'\x00\x00'
+#     arcount = b'\x00\x00'
+#     header = transaction_id + flags + qdcount + ancount + nscount + arcount
+
+#     # ساخت QNAME
+#     qname = b''
+#     for part in domain.split('.'):
+#         qname += bytes([len(part)]) + part.encode()
+#     qname += b'\x00'  # پایان دامنه
+
+#     qtype = b'\x00\x10'  # TXT record
+#     qclass = b'\x00\x01' # IN class
+#     question = qname + qtype + qclass
+
+#     packet = header + question
+
+#     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#     sock.sendto(packet, (server_ip, port))
+#     try:
+#         response, _ = sock.recvfrom(512)
+#         print(f"[✓] Got response from {server_ip}:{port}")
+#     except Exception as e:
+#         print(f"[!] No response: {e}")
+
+
 
 
