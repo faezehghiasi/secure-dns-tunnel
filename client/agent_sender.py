@@ -1,6 +1,8 @@
-from crypto_utils.crypto_module import encrypt_chunk
-from client.base32_utils import encode_base32
+from crypto_utils.crypto_module import encrypt_message
+from base32_utils.base32 import encode_base32
 import dns.resolver
+import math
+
 
 def chunk_message(message: bytes, chunk_size=30):
     chunks = []
@@ -21,7 +23,7 @@ def send_chunked_message(message: bytes, key: bytes, base_domain="tunnel.example
         seq_prefix = f"{seq:03d}|".encode()
         chunk_with_seq = seq_prefix + chunk + end_marker
 
-        encrypted = encrypt_chunk(chunk_with_seq, key)
+        encrypted = encrypt_message(chunk_with_seq, key)
         encoded = encode_base32(encrypted)
         domain = f"{encoded}.{base_domain}"
         try:
