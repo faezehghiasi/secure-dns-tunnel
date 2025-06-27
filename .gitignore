@@ -5,5 +5,5 @@ base32_utils/__pycache__/
 client/__pycache__/
 crypto_utils/__pycache__/
 server/__pycache__/
-
+venv/
 

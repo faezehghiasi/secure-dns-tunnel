@@ -1,10 +1,15 @@
 import socket ,base64
 from crypto_utils.crypto_module import decrypt_message
 from base32_utils.base32 import decode_base32
+
 port =53535
 ip = "127.0.0.1"
+SHARED_KEY = b'0123456789abcdef0123456789abcdef'
+
 sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 sock.bind((ip , port))
+
+print("[✓] DNS Tunnel Server is running on port", port)
 
 MessageStorage = {}
 
@@ -12,23 +17,17 @@ def getFlags(flags):
     QR = '0'
     OpCode=''
 
-
-
     # byte1=bytes(flags[:1])
     # byte2=bytes(flags[1:2])
 
-
     # for bit in range(1,5):
     #     OpCode+= str(ord(byte1)& (1<<bit))
-
 
 #///////////////// اینجا رو نمیفهمم چرا چت گفت عوض کن تغییر بده
 
     byte1 = flags[0]
     for bit in range(1, 5):
      OpCode += str((byte1 & (1 << (7 - bit))) >> (7 - bit))
-
-
 
     AA='1'
     TC='0'
@@ -89,30 +88,32 @@ def buildQuestion(domainName,QType):
 
 
 
-def decrypt(enMass):
+def decrypt(enMass: str):
 
     global MessageStorage
-    #****** Decode the massage with base32
-    AESMass =b''
-    for en in enMass:
-        AESMass+=decode_base32(en)
 
-    #***** Decrypte the massage
-    deMass=decrypt_message(AESMass)
+    # 1) تمام رشتهٔ base32 را یک‌جا دیکود کن
+    AESMass = decode_base32(enMass)
 
-    #******* Get the sequence number*****
-    deMass=deMass.decode()
-    SequenceNumber = deMass.split('|')[0]
-    content = deMass[deMass.find('|')+1:]
-    MessageStorage[int(SequenceNumber)]= content
-    if content.strip().endswith("END"):
-        ordered = dict(sorted(MessageStorage.items(), key=lambda x: int(x[0])))
-        full_message = ''.join(ordered.values())
-        print("Full message reconstructed:")
+    # 2) رمزگشایی AES
+    deMass = decrypt_message(AESMass, SHARED_KEY)
+
+    # 3) استخراج شمارهٔ سکانس و محتوا
+    deMass = deMass.decode()
+    seq, content = deMass.split('|', 1)
+    print(f"[INFO] Chunk received: seq={seq} content={content[:20]}...")  # ← اضافه شده
+    MessageStorage[int(seq)] = content
+
+    # 4) اگر قطعهٔ آخر رسید، پیام کامل را سرِ هم کن
+    if content.endswith("<END>"):
+        ordered = dict(sorted(MessageStorage.items()))
+        full_message = ''.join(ordered.values()).removesuffix("<END>")
+        print("\n[✓] Full message reconstructed:")
         print(full_message)
         MessageStorage.clear()
 
-    return SequenceNumber
+    return seq
+
 
 def buildAnswer(enMass):
     SequenceNumber=decrypt(enMass)
@@ -138,10 +139,8 @@ def buildResponse(data):
     #********Get flags********
     Flags=getFlags(data[2:4])
     
-
     #***** Question Count ***********
     QDCount = (1).to_bytes(2, byteorder='big')
-
 
     #****** Answer Count **************
     ANCount= (1).to_bytes(2,byteorder="big")
@@ -154,12 +153,9 @@ def buildResponse(data):
 
     dnsHeader = TransactionID+Flags+QDCount+ANCount+NSCount+ARCount
     
-
-
     domainName ,Qtype = getQuestionDomain(data[12:])
 
-    encryptedMassage = ''.join(domainName[:-3])
-
+    encryptedMassage = ''.join(domainName[:-3])  # ← مطمئن شو که فقط 3 label انتهایی base domain هستن
 
     QuestionSection= buildQuestion(domainName,Qtype)
     AnswerSection = buildAnswer(encryptedMassage)
@@ -169,8 +165,8 @@ def buildResponse(data):
 
 
 
-
 while 1:
     data , addr=sock.recvfrom(512)
+    print(f"\n[+] Received DNS query from {addr}")
     response=buildResponse(data)
     sock.sendto(response ,addr)
