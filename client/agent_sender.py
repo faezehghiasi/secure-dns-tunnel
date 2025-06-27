@@ -1,6 +1,6 @@
 from crypto_utils.crypto_module import encrypt_message
 from base32_utils.base32 import encode_base32
-import socket
+import dns.resolver, dns.exception
 
 SHARED_KEY = b'0123456789abcdef0123456789abcdef'
 
@@ -42,42 +42,35 @@ def build_payload(sequence, chunk, is_last):
 
 
 
-def send_dns_query(domain, server_ip="127.0.0.1", port=53535):
-    transaction_id = b'\xaa\xaa'
-    flags = b'\x01\x00'
-    qdcount = b'\x00\x01'
-    header = transaction_id + flags + qdcount + b'\x00\x00\x00\x00\x00\x00'
 
-    qname = b''
-    for part in domain.split('.'):
-        qname += bytes([len(part)]) + part.encode()
-    qname += b'\x00'
+def send_dns_query(domain):
+    resolver = dns.resolver.Resolver()
+    resolver.nameservers = ['127.0.0.1']   # سرور لوکالِ تو
+    resolver.port = 53                     # پکت روی 53 می‌رود، iptables به 53535 می‌چرخاند
 
-    qtype = b'\x00\x10'
-    qclass = b'\x00\x01'
-    packet = header + qname + qtype + qclass
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(2)
-    sock.sendto(packet, (server_ip, port))
     try:
-        response, _ = sock.recvfrom(512)
-        print("[INFO] Acknowledgment received for sequence:", domain.split('.')[0][:4])
-    except socket.timeout:
-        print("[WARNING] No acknowledgment received for sequence:", domain.split('.')[0][:4])
-    finally:
-        sock.close()
+        answers = resolver.resolve(domain, "TXT", lifetime=2)
+        # اگر متن ACK لازم داری:
+        # ack_text = answers[0].strings[0].decode()
+        print("[INFO] acknowledgment received for sequence:",
+              domain.split('.')[0][:4])
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        print("[WARNING] no answer for seq:", domain.split('.')[0][:4])
+    except dns.exception.Timeout:
+        print("[WARNING] timeout for seq:", domain.split('.')[0][:4])
 
 
 
-def send_chunked_message(message, base_domain, server_ip="127.0.0.1", port=53535):
+
+def send_chunked_message(message, base_domain):
     chunks = chunk_message(message)
-    for i in range(len(chunks)):
-        payload = build_payload(i, chunks[i], i == len(chunks) - 1)
-        encrypted = encrypt_message(payload, SHARED_KEY)
-        encoded = encode_base32(encrypted)
-        domain = build_domain(encoded, base_domain)
-        send_dns_query(domain, server_ip, port)
+    for i, chunk in enumerate(chunks):
+        payload    = build_payload(i, chunk, i == len(chunks) - 1)
+        encrypted  = encrypt_message(payload, SHARED_KEY)
+        encoded    = encode_base32(encrypted)           
+        domain = build_domain(encoded, base_domain) 
+        send_dns_query(domain)                          
+
 
 if __name__ == "__main__":
     msg = b"hello this is a test message to send securely over DNS tunnel using chunking and encryption methods to ensure that the message is transmitted correctly and securely without exceeding DNS label limits."
