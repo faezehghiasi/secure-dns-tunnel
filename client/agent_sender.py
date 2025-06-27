@@ -45,16 +45,18 @@ def send_dns_query(domain):
     while tries < MAX_RETRY:
         try:
             answers = resolver.resolve(domain, "TXT", lifetime=2)
-            print("[INFO] acknowledgment received for sequence:", domain.split('.')[0][:4])
+            ack_text = answers[0].strings[0].decode()  
+            seq = ack_text.rsplit(' ', 1)[-1]
+            print("[INFO] acknowledgment received for sequence:", seq)
             return True
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
-            print(f"[WARNING] no answer for seq: {domain.split('.')[0][:4]} (try {tries+1})")
+            print(f"[WARNING] no answer for seq: ??? (try {tries+1})")
         except dns.exception.Timeout:
-            print(f"[WARNING] timeout for seq: {domain.split('.')[0][:4]} (try {tries+1})")
+            print(f"[WARNING] timeout for seq: ??? (try {tries+1})")
         tries += 1
         if tries < MAX_RETRY:
             time.sleep(RETRY_DELAY)
-    print(f"[ERROR] failed to send seq: {domain.split('.')[0][:4]} after {MAX_RETRY} attempts.")
+    print(f"[ERROR] failed to send seq: ??? after {MAX_RETRY} attempts.")
     return False
 
 def send_chunked_message(message, base_domain):
