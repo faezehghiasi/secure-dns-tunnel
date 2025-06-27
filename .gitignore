@@ -1,1 +1,9 @@
+
 __pycache__
+DNS_env/
+base32_utils/__pycache__/
+client/__pycache__/
+crypto_utils/__pycache__/
+server/__pycache__/
+
+
